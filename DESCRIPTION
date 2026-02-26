@@ -1,7 +1,7 @@
 Package: statuser
 Type: Package
 Title: Statistical Tools Designed for End Users
-Version: 0.1.8
+Version: 0.1.9
 Authors@R: person(given = "Uri",
                   family = "Simonsohn",
                   role = c("aut", "cre"),
@@ -22,8 +22,8 @@ Suggests: testthat (>= 3.0.0), crayon, quantreg, estimatr,
         marginaleffects, broom, modelsummary
 Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2026-02-05 12:14:59 UTC; uri_s
+Packaged: 2026-02-26 13:19:06 UTC; uri_s
 Author: Uri Simonsohn [aut, cre]
 Maintainer: Uri Simonsohn <urisohn@gmail.com>
 Repository: CRAN
-Date/Publication: 2026-02-09 13:10:08 UTC
+Date/Publication: 2026-02-26 13:40:02 UTC

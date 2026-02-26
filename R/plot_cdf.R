@@ -7,8 +7,16 @@
 #' @param formula A formula of the form \code{y ~ group} where \code{y} is the
 #'   response variable and \code{group} is the grouping variable. Alternatively,
 #'   can be just \code{y} (without a grouping variable) to plot a single ECDF.
+#' @param y An optional second vector to compare with \code{formula}. When provided,
+#'   creates a comparison plot of two variables. This allows syntax like 
+#'   \code{plot_cdf(y1, y2)} to compare two vectors.
 #' @param data An optional data frame containing the variables in the formula.
 #'   If \code{data} is not provided, variables are evaluated from the calling environment.
+#' @param order Controls the order in which groups appear in the plot and legend. 
+#'   Use \code{-1} to reverse the default order. Alternatively, provide a vector specifying
+#'   the exact order (e.g., \code{c("B", "A", "C")}). If \code{NULL} (default), groups are 
+#'   ordered by their factor levels (if the grouping variable is a factor) or sorted 
+#'   alphabetically/numerically. Only applies when using grouped plots.
 #' @param show.ks Logical. If TRUE (default), shows Kolmogorov-Smirnov test results
 #'   when there are exactly 2 groups. If FALSE, KS test results are not displayed.
 #' @param show.quantiles Logical. If TRUE (default), shows horizontal lines and results
@@ -60,6 +68,11 @@
 #' df <- data.frame(value = rnorm(100), group = rep(c("A", "B"), 50))
 #' plot_cdf(value ~ group, data = df)
 #' plot_cdf(value ~ group, data = df, col = c("red", "blue"))
+#'
+#' # Compare two vectors
+#' y1 <- rnorm(50)
+#' y2 <- rnorm(50, mean = 1)
+#' plot_cdf(y1, y2)
 #' 
 #' # Formula syntax without data (variables evaluated from environment)
 #' widgetness <- rnorm(100)
@@ -80,13 +93,71 @@
 #' summary(result$quantile_regression_50)
 
 #' @export
-plot_cdf <- function(formula, data = NULL, show.ks = TRUE, show.quantiles = TRUE, ...) {
+plot_cdf <- function(formula, y = NULL, data = NULL, order = NULL, show.ks = TRUE, show.quantiles = TRUE, ...) {
+  #0. CAPTURE UNEVALUATED ARGUMENTS FIRST (before ANY evaluation!)
+  mc <- match.call()
+  
+  # Resolve first argument (formula or first vector)
+  formula_resolved <- evaluate_variable_arguments(
+    arg_expr = mc$formula,
+    arg_name = "formula",
+    data = data,
+    calling_env = parent.frame(),
+    func_name = "plot_cdf",
+    allow_null = FALSE
+  )
+  
+  # Resolve second argument if present (for two-vector mode)
+  y_resolved <- if (!is.null(mc$y)) {
+    evaluate_variable_arguments(
+      arg_expr = mc$y,
+      arg_name = "y",
+      data = data,
+      calling_env = parent.frame(),
+      func_name = "plot_cdf",
+      allow_null = TRUE
+    )
+  } else {
+    list(value = NULL, name = NULL, name_raw = NULL, was_symbol = FALSE)
+  }
+  
+  # Now overwrite the arguments with resolved values
+  formula <- formula_resolved$value
+  y <- y_resolved$value
+  
   # Extract plotting parameters from ...
     dots <- list(...)
     
     # Remove show.ks and show.quantiles from dots if passed (they're formal parameters)
     dots$show.ks <- NULL
     dots$show.quantiles <- NULL
+    
+  # Check if we're in two-vector comparison mode (formula is vector, y is vector)
+  if (!is.null(y) && !inherits(formula, "formula")) {
+    # Two-vector comparison mode: plot_cdf(y1, y2)
+    # Use resolved names
+    y1_name <- formula_resolved$name
+    y2_name <- y_resolved$name
+    
+    # Validate inputs
+    if (!is.numeric(formula) || !is.vector(formula)) {
+      stop(sprintf("plot_cdf(): First argument '%s' must be a numeric vector", y1_name), call. = FALSE)
+    }
+    if (!is.numeric(y) || !is.vector(y)) {
+      stop(sprintf("plot_cdf(): Second argument '%s' must be a numeric vector", y2_name), call. = FALSE)
+    }
+    
+    # Create a data frame and recursively call with grouped syntax
+    df <- data.frame(
+      value = c(formula, y),
+      group = c(rep(y1_name, length(formula)), rep(y2_name, length(y))),
+      stringsAsFactors = FALSE
+    )
+    
+    # Forward all arguments to the grouped version
+    return(plot_cdf(value ~ group, data = df, order = order, 
+                    show.ks = show.ks, show.quantiles = show.quantiles, ...))
+  }
   
   # Validate formula early if it is one
   validate_formula(formula, data, func_name = "plot_cdf", calling_env = parent.frame())
@@ -104,57 +175,43 @@ plot_cdf <- function(formula, data = NULL, show.ks = TRUE, show.quantiles = TRUE
     NULL
   }
   
+  # Capture original group before validation (to preserve factor levels)
+  group_original_before_validation <- NULL
+  if (is_formula_input) {
+    formula_vars <- all.vars(formula)
+    if (length(formula_vars) >= 2) {
+      group_var_name <- formula_vars[2]
+      if (!is.null(data)) {
+        # Extract from data frame
+        if (group_var_name %in% names(data)) {
+          group_original_before_validation <- data[[group_var_name]]
+        }
+      } else {
+        # Extract from environment
+        tryCatch({
+          group_original_before_validation <- eval(as.name(group_var_name), envir = parent.frame())
+        }, error = function(e) {
+          # If we can't find it, that's ok - validation will handle the error
+        })
+      }
+    }
+  }
+  
   # Validate inputs using validation function shared with plot_density, plot_cdf, plot_freq
-  # If not a formula, we need to pass it in a way that preserves the variable name
+  # If formula input, use validate_plot
   if (is_formula_input) {
     validated <- validate_plot(formula, NULL, data, func_name = "plot_cdf", require_group = FALSE, data_name = data_name)
   } else {
-    # Not a formula - capture the actual variable name first
-    formula_expr <- mc$formula
-    actual_name <- if (!is.null(formula_expr)) {
-      deparse(formula_expr)
-    } else {
-      deparse(substitute(formula))
-    }
-    # Remove quotes if present
-    actual_name <- gsub('^"|"$', '', actual_name)
-    
-    # If data is provided, extract the variable from data frame first
-    # This prevents validate_plot from looking for "formula" in the data frame
-    if (!is.null(data)) {
-      if (!is.data.frame(data)) {
-        stop("plot_cdf(): 'data' must be a data frame", call. = FALSE)
-      }
-      # Clean the variable name (remove $ prefix if present)
-      clean_name <- if (grepl("\\$", actual_name)) {
-        strsplit(actual_name, "\\$")[[1]][length(strsplit(actual_name, "\\$")[[1]])]
-      } else {
-        actual_name
-      }
-      # Check if variable exists in data
-      if (!clean_name %in% names(data)) {
-        stop(sprintf("plot_cdf(): Column \"%s\" not found in dataset \"%s\"", clean_name, data_name), call. = FALSE)
-      }
-      # Extract variable from data frame
-      formula <- data[[clean_name]]
-      # Now call validate_plot without data (since we've already extracted the variable)
-      validated <- validate_plot(formula, NULL, NULL, func_name = "plot_cdf", require_group = FALSE, data_name = data_name)
-      # Override the names with the actual variable name
-      validated$y_name_raw <- clean_name
-      validated$y_name <- clean_name
-    } else {
-      # No data - pass it to validation (will evaluate from environment)
-      validated <- validate_plot(formula, NULL, data, func_name = "plot_cdf", require_group = FALSE, data_name = data_name)
-      # Override the name if it got "formula" instead of the actual variable name
-      if (validated$y_name_raw == "formula") {
-        validated$y_name_raw <- actual_name
-        validated$y_name <- if (grepl("\\$", actual_name)) {
-          strsplit(actual_name, "\\$")[[1]][length(strsplit(actual_name, "\\$")[[1]])]
-        } else {
-          actual_name
-        }
-      }
-    }
+    # Not a formula - use resolved names from evaluate_variable_arguments
+    validated <- list(
+      y = formula,
+      group = NULL,
+      y_name = formula_resolved$name,
+      group_name = NULL,
+      y_name_raw = formula_resolved$name_raw,
+      group_name_raw = NULL,
+      data_name = data_name
+    )
   }
   y <- validated$y
   group <- validated$group
@@ -163,6 +220,14 @@ plot_cdf <- function(formula, data = NULL, show.ks = TRUE, show.quantiles = TRUE
   y_name_raw <- validated$y_name_raw
   group_name_raw <- validated$group_name_raw
   data_name <- validated$data_name
+  
+  # Store original group for factor level checking (before NA removal)
+  # Use the version captured before validation if available (to preserve factor levels)
+  group_original <- if (!is.null(group_original_before_validation)) {
+    group_original_before_validation
+  } else {
+    group
+  }
   
   # Check if group is provided
   has_group <- !is.null(group)
@@ -177,19 +242,58 @@ plot_cdf <- function(formula, data = NULL, show.ks = TRUE, show.quantiles = TRUE
     n.nagroup = sum(isnagroup)
     n.nay = sum(isnay)
     
-    if (n.nagroup>0) message2("plot_cdf() says: dropped ",n.nagroup," observations with missing '",group_name_raw,"' values",col='red4')
-    if (n.nay>0) message2("plot_cdf() says: dropped ",n.nay," observations with missing '",y_name_raw,"' values",col='red4')
+    if (n.nagroup>0) message2("plot_cdf() says: dropped ",n.nagroup," observations with missing '",group_name_raw,"' values",col='red2')
+    if (n.nay>0) message2("plot_cdf() says: dropped ",n.nay," observations with missing '",y_name_raw,"' values",col='red2')
     
-    # Get unique groups and sort them alphabetically
-    unique_x <- sort(unique(group))
-    n_groups <- length(unique_x)
+    # Get unique groups and apply ordering
+    unique_groups <- unique(group)
+    n_groups <- length(unique_groups)
+    
+    # Check if order = -1 (reverse default order)
+    reverse_order <- FALSE
+    if (!is.null(order) && length(order) == 1 && is.numeric(order) && order == -1) {
+      reverse_order <- TRUE
+      order <- NULL  # Process as default, then reverse
+    }
+    
+    if (!is.null(order)) {
+      # User specified custom order
+      # Validate that order contains all groups
+      missing_groups <- setdiff(unique_groups, order)
+      extra_groups <- setdiff(order, unique_groups)
+      
+      if (length(missing_groups) > 0) {
+        stop(sprintf("plot_cdf(): 'order' is missing group(s): %s", 
+                     paste(missing_groups, collapse = ", ")), call. = FALSE)
+      }
+      if (length(extra_groups) > 0) {
+        warning(sprintf("plot_cdf(): 'order' contains group(s) not in data: %s", 
+                       paste(extra_groups, collapse = ", ")))
+      }
+      
+      # Use the specified order (only groups that exist in data)
+      unique_x <- order[order %in% unique_groups]
+    } else if (is.factor(group_original)) {
+      # Respect factor levels
+      factor_levels <- levels(group_original)
+      # Only include levels that actually appear in the data
+      unique_x <- factor_levels[factor_levels %in% unique_groups]
+    } else {
+      # Default: sort alphabetically/numerically
+      unique_x <- sort(unique_groups)
+    }
+    
+    # Reverse order if order = -1 was specified
+    if (reverse_order) {
+      unique_x <- rev(unique_x)
+    }
   } else {
     # No group variable - just drop missing y values
     isnay=is.na(y)
     y=y[!isnay]
     
     n.nay = sum(isnay)
-    if (n.nay>0) message2("plot_cdf() says: dropped ",n.nay," observations with missing '",y_name_raw,"' values",col='red4')
+    if (n.nay>0) message2("plot_cdf() says: dropped ",n.nay," observations with missing '",y_name_raw,"' values",col='red2')
     
     unique_x <- NULL
     n_groups <- 1
@@ -287,15 +391,23 @@ plot_cdf <- function(formula, data = NULL, show.ks = TRUE, show.quantiles = TRUE
     # Set ylab if not provided
       ylab_title <- if ("ylab" %in% names(dots)) dots$ylab else "% of observations"
     
-    # Set default ylim if not provided (extend to 1.15 to accommodate legend above plot if groups exist)
+    # Set default ylim if not provided (extend to accommodate legend above plot if groups exist)
       if (!"ylim" %in% names(dots)) {
         if (has_group && n_groups > 1) {
-          default_ylim <- c(0, 1.15)
+          default_ylim <- c(0, 1.25)  # Reserve top 20% for legend (1.25 = 1 / 0.8)
         } else {
           default_ylim <- c(0, 1)
         }
       } else {
         default_ylim <- dots$ylim
+      }
+      
+    # Set default xlim if not provided (add padding to prevent clipping at edges)
+      if (!"xlim" %in% names(dots)) {
+        x_range <- y_max - y_min
+        default_xlim <- c(y_min - 0.05 * x_range, y_max + 0.05 * x_range)
+      } else {
+        default_xlim <- dots$xlim
       }
     
     # Ensure adequate top margin for main title and legend
@@ -330,6 +442,7 @@ plot_cdf <- function(formula, data = NULL, show.ks = TRUE, show.quantiles = TRUE
                       main = main_title,
                       font.main = font_main,
                       cex.main = cex_main,
+                      xlim = default_xlim,
                       ylim = default_ylim,
                       font.lab = 2, cex.lab = 1.2, las = 1,
                       yaxt = "n",  # Suppress default y-axis to draw custom percentage axis

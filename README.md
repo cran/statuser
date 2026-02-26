@@ -62,8 +62,12 @@ result <- twolines(y ~ x, data = data, pngfile = "twolines_plot.png")
 ```r
 y <- rnorm(100)
 x <- rep(c("A", "B"), 50)
-plot_cdf(y, x)  # Uses default colors (red4, dodgerblue for 2 groups)
-plot_cdf(y, x, col = c("red", "blue"))  # Custom colors
+plot_cdf(y ~ x)  # Uses default colors
+plot_cdf(y ~ x, col = c("red", "blue"))  # Custom colors
+
+# Control group order
+plot_cdf(y ~ x, order = -1)  # Reverse default order
+plot_cdf(y ~ x, order = c("B", "A"))  # Custom order
 ```
 </details>
 
@@ -73,9 +77,13 @@ plot_cdf(y, x, col = c("red", "blue"))  # Custom colors
 ```r
 y <- rnorm(100)
 x <- rep(c("A", "B"), 50)
-plot_density(y, x)  # Uses default colors (red4, dodgerblue for 2 groups)
-plot_density(y, x, col = c("red", "blue"))  # Custom colors
-plot_density(y, x, show.means = FALSE)  # Hide mean segments
+plot_density(y ~ x)  # Uses default colors
+plot_density(y ~ x, col = c("red", "blue"))  # Custom colors
+plot_density(y ~ x, show.means = FALSE)  # Hide mean segments
+
+# Control group order
+plot_density(y ~ x, order = -1)  # Reverse default order
+plot_density(y ~ x, order = c("B", "A"))  # Custom order
 ```
 </details>
 
@@ -88,13 +96,21 @@ plot_freq(x)
 
 # Grouped frequency plot
 df <- data.frame(value = c(1, 1, 2, 2, 2, 5, 5), group = c("A", "A", "A", "B", "B", "A", "B"))
-plot_freq(value, by = group, data = df)
+plot_freq(value ~ group, data = df)
+
+# Control group order in legend and plot
+plot_freq(value ~ group, data = df, order = c("B", "A"))  # B first, then A
+plot_freq(value ~ group, data = df, order = -1)  # Reverse default order
+
+# Factor levels are respected automatically
+df$group <- factor(df$group, levels = c("B", "A"))
+plot_freq(value ~ group, data = df)  # B will appear first
 
 # Show percentages instead of frequencies
-plot_freq(value, by = group, data = df, freq = FALSE)
+plot_freq(value ~ group, data = df, freq = FALSE)
 
 # Customize legend and labels
-plot_freq(value, by = group, data = df, legend.title = "Group", col.text = "black")
+plot_freq(value ~ group, data = df, legend.title = "Treatment", col.text = "black")
 ```
 </details>
 
@@ -325,7 +341,9 @@ message2("This is a cyan message", col = "cyan")
 </details>
 
 <details>
-<summary><code>clear()</code>: Clear environment, console, and all graphics devices</summary>
+<summary><code>clear()</code>: Clear plot, global environment, and console</summary>
+
+Clears plot, global environment, and console. On first use you are prompted to authorize (one-time; your choice is saved).
 
 ```r
 # Create some objects
@@ -333,7 +351,7 @@ message2("This is a cyan message", col = "cyan")
 	y <- rnorm(10)
 	plot(x, y)
 
-# Clear everything
+# Clear everything (first run may prompt for one-time permission)
 	clear()
 ```
 </details> 
@@ -358,5 +376,6 @@ GPL-3
 
 ## Version
 
-0.1.4
+- **Release:** 0.1.8  
+- **Development:** 0.1.8.9001
 
