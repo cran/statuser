@@ -1,3 +1,4 @@
+#plot_freq_001
 test_that("plot_freq runs without errors", {
   x <- c(1, 1, 2, 2, 2, 5, 5)
   
@@ -10,6 +11,7 @@ test_that("plot_freq runs without errors", {
   expect_true("value" %in% names(result) || "x" %in% names(result))
 })
 
+#plot_freq_002
 test_that("plot_freq handles data frame input", {
   df <- data.frame(value = c(1, 1, 2, 2, 2, 5, 5))
   
@@ -20,6 +22,7 @@ test_that("plot_freq handles data frame input", {
   expect_true(is.data.frame(result))
 })
 
+#plot_freq_003
 test_that("plot_freq handles grouping", {
   x <- c(1, 1, 2, 2, 2, 5, 5)
   group <- c("A", "A", "A", "B", "B", "A", "B")
@@ -30,6 +33,7 @@ test_that("plot_freq handles grouping", {
   expect_true(is.data.frame(result))
 })
 
+#plot_freq_004
 test_that("plot_freq handles group with data frame", {
   df <- data.frame(
     value = c(1, 1, 2, 2, 2, 5, 5),
@@ -43,6 +47,18 @@ test_that("plot_freq handles group with data frame", {
   expect_true(is.data.frame(result))
 })
 
+#plot_freq_005
+test_that("plot_freq accepts df$col ~ df$col2 without bare column names in env", {
+  df1 <- data.frame(
+    value = c(1, 1, 2, 2, 2, 5, 5),
+    grp = c("A", "A", "A", "B", "B", "A", "B")
+  )
+  expect_error(plot_freq(df1$value ~ df1$grp), NA)
+  result <- plot_freq(df1$value ~ df1$grp)
+  expect_true(is.data.frame(result))
+})
+
+#plot_freq_006
 test_that("plot_freq handles freq parameter", {
   x <- c(1, 1, 2, 2, 2)
   
@@ -53,6 +69,7 @@ test_that("plot_freq handles freq parameter", {
   expect_error(plot_freq(x ~ 1, freq = FALSE), NA)
 })
 
+#plot_freq_007
 test_that("plot_freq handles custom parameters", {
   x <- c(1, 1, 2, 2, 2)
   
@@ -66,6 +83,7 @@ test_that("plot_freq handles custom parameters", {
   expect_error(plot_freq(x ~ 1, width = 0.5), NA)
 })
 
+#plot_freq_008
 test_that("plot_freq handles value.labels parameter", {
   x <- c(1, 1, 2, 2, 2)
   
@@ -74,20 +92,67 @@ test_that("plot_freq handles value.labels parameter", {
   
   # Without labels
   expect_error(plot_freq(x ~ 1, value.labels = FALSE), NA)
+  
+  # Character options
+  expect_error(plot_freq(x ~ 1, value.labels = "all"), NA)
+  expect_error(plot_freq(x ~ 1, value.labels = "auto"), NA)
+  
+  # Top-N labels
+  expect_error(plot_freq(x ~ 1, value.labels = 5), NA)
+  
+  # None / all
+  expect_error(plot_freq(x ~ 1, value.labels = 0), NA)
+  expect_error(plot_freq(x ~ 1, value.labels = -1), NA)
+  
+  # Grouped path also accepts numeric / logical
+  df <- data.frame(value = x, group = c("A", "A", "B", "B", "A"))
+  expect_error(plot_freq(value ~ group, data = df, value.labels = 2), NA)
+  expect_error(plot_freq(value ~ group, data = df, value.labels = TRUE), NA)
+  expect_error(plot_freq(value ~ group, data = df, value.labels = FALSE), NA)
+  expect_error(plot_freq(value ~ group, data = df, value.labels = "all"), NA)
+  expect_error(plot_freq(value ~ group, data = df, value.labels = "auto"), NA)
+  
+  # In grouped plots, numeric value.labels applies per group (still should not error)
+  df2 <- data.frame(value = c(1, 1, 1, 2, 2, 3, 3, 4),
+                    group = c("A", "A", "A", "A", "B", "B", "B", "B"))
+  expect_error(plot_freq(value ~ group, data = df2, value.labels = 1), NA)
+  
+  # Labeling does not affect returned data
+  r1 <- plot_freq(value ~ group, data = df2, value.labels = 1)
+  r0 <- plot_freq(value ~ group, data = df2, value.labels = 0)
+  expect_equal(r1, r0)
+  
+  # Invalid inputs
+  expect_error(plot_freq(x ~ 1, value.labels = -2))
+  expect_error(plot_freq(x ~ 1, value.labels = NA))
+  expect_error(plot_freq(x ~ 1, value.labels = c(1, 2)))
+  expect_error(plot_freq(x ~ 1, value.labels = "nope"))
 })
 
-test_that("plot_freq handles add parameter", {
-  x <- c(1, 1, 2, 2, 2)
+#plot_freq_009
+test_that("plot_freq handles show.x.value parameter", {
+  x <- c(1, 1, 2, 2, 2, 3, 3)
+  df <- data.frame(value = x, group = rep(c("A", "B"), length.out = length(x)))
   
-  # Create new plot
-  expect_error(plot_freq(x ~ 1, add = FALSE), NA)
+  # Non-grouped: x= only where frequency labels are drawn
+  expect_error(plot_freq(x ~ 1, value.labels = 2, show.x.value = "auto"), NA)
+  expect_error(plot_freq(x ~ 1, value.labels = 0, show.x.value = "auto"), NA)
   
-  # Add to existing plot (note: x + 1 needs to be evaluated first for formula)
-  plot_freq(x ~ 1, add = FALSE)
-  x_plus_1 <- x + 1
-  expect_error(plot_freq(x_plus_1 ~ 1, add = TRUE), NA)
+  # Grouped
+  expect_error(plot_freq(value ~ group, data = df, value.labels = 2, show.x.value = "auto"), NA)
+  
+  # Explicit TRUE/FALSE still accepted
+  expect_error(plot_freq(x ~ 1, show.x.value = TRUE), NA)
+  expect_error(plot_freq(x ~ 1, show.x.value = FALSE), NA)
 })
 
+#plot_freq_010
+test_that("plot_freq handles ticks.max parameter", {
+  x <- 1:50
+  expect_error(plot_freq(x ~ 1, ticks.max = 5), NA)
+})
+
+#plot_freq_011
 test_that("plot_freq handles show.legend parameter", {
   x <- c(1, 1, 2, 2, 2)
   group <- c("A", "A", "B", "B", "A")
@@ -99,6 +164,7 @@ test_that("plot_freq handles show.legend parameter", {
   expect_error(plot_freq(x ~ group, show.legend = FALSE), NA)
 })
 
+#plot_freq_012
 test_that("plot_freq returns correct structure", {
   x <- c(1, 1, 2, 2, 2, 5, 5)
   
@@ -112,6 +178,7 @@ test_that("plot_freq returns correct structure", {
   expect_true(nrow(result) > 0)
 })
 
+#plot_freq_013
 test_that("plot_freq handles missing values", {
   x <- c(1, 1, 2, NA, 2, 5, 5)
   
@@ -122,6 +189,7 @@ test_that("plot_freq handles missing values", {
   expect_true(is.data.frame(result))
 })
 
+#plot_freq_014
 test_that("plot_freq error message shows correct dataset name", {
   # Create a dataset with a specific name
   IV5 <- data.frame(value = c(1, 1, 2, 2, 2, 5, 5))
@@ -134,6 +202,7 @@ test_that("plot_freq error message shows correct dataset name", {
   )
 })
 
+#plot_freq_015
 test_that("plot_freq handles order parameter for groups", {
   df <- data.frame(
     value = c(1, 1, 2, 2, 2, 5, 5, 1, 5),
@@ -149,6 +218,7 @@ test_that("plot_freq handles order parameter for groups", {
   expect_equal(names(result), c("value", "B", "A"))
 })
 
+#plot_freq_016
 test_that("plot_freq respects factor levels for groups when order is NULL", {
   # Create factor with specific level order
   df <- data.frame(
@@ -165,6 +235,7 @@ test_that("plot_freq respects factor levels for groups when order is NULL", {
   expect_equal(names(result), c("value", "B", "A"))
 })
 
+#plot_freq_017
 test_that("plot_freq order parameter validates group names", {
   df <- data.frame(
     value = c(1, 1, 2, 2, 2, 5, 5),
@@ -184,6 +255,7 @@ test_that("plot_freq order parameter validates group names", {
   )
 })
 
+#plot_freq_018
 test_that("plot_freq order works with 3 groups", {
   df <- data.frame(
     value = rep(c(1, 2, 5), 6),
@@ -199,6 +271,7 @@ test_that("plot_freq order works with 3 groups", {
   expect_equal(names(result), c("value", "C", "A", "B"))
 })
 
+#plot_freq_019
 test_that("plot_freq default group order is sorted", {
   df <- data.frame(
     value = c(1, 1, 2, 2, 2, 5, 5, 1, 5),
@@ -211,6 +284,7 @@ test_that("plot_freq default group order is sorted", {
   expect_equal(names(result), c("value", "A", "C"))
 })
 
+#plot_freq_020
 test_that("plot_freq order = -1 reverses default order", {
   df <- data.frame(
     value = c(1, 1, 2, 2, 2, 5, 5, 1, 5),
@@ -227,6 +301,7 @@ test_that("plot_freq order = -1 reverses default order", {
   expect_equal(names(result_reversed), c("value", "B", "A"))
 })
 
+#plot_freq_021
 test_that("plot_freq order = -1 reverses factor levels", {
   df <- data.frame(
     value = c(1, 1, 2, 2, 2, 5, 5, 1, 5),
@@ -244,6 +319,7 @@ test_that("plot_freq order = -1 reverses factor levels", {
   expect_equal(names(result_reversed), c("value", "B", "A"))
 })
 
+#plot_freq_022
 test_that("plot_freq order = -1 works with 3 groups", {
   df <- data.frame(
     value = rep(c(1, 2, 5), 6),
@@ -260,6 +336,7 @@ test_that("plot_freq order = -1 works with 3 groups", {
   expect_equal(names(result_reversed), c("value", "C", "B", "A"))
 })
 
+#plot_freq_023
 test_that("plot_freq handles two-vector comparison", {
   y1 <- c(1, 1, 2, 2, 2, 5, 5)
   y2 <- c(1, 2, 2, 3, 3, 3)
@@ -275,6 +352,7 @@ test_that("plot_freq handles two-vector comparison", {
   expect_true("value" %in% names(result))
 })
 
+#plot_freq_024
 test_that("plot_freq two-vector comparison returns correct structure", {
   y1 <- c(1, 1, 2, 2, 2)
   y2 <- c(2, 3, 3, 3)
@@ -289,6 +367,7 @@ test_that("plot_freq two-vector comparison returns correct structure", {
   expect_true("y2" %in% names(result))
 })
 
+#plot_freq_025
 test_that("plot_freq two-vector comparison with custom parameters", {
   y1 <- c(1, 1, 2, 2, 2)
   y2 <- c(2, 3, 3, 3)
@@ -303,6 +382,7 @@ test_that("plot_freq two-vector comparison with custom parameters", {
   expect_error(plot_freq(y1, y2, show.legend = FALSE), NA)
 })
 
+#plot_freq_026
 test_that("plot_freq two-vector comparison handles order parameter", {
   y1 <- c(1, 1, 2, 2, 2)
   y2 <- c(2, 3, 3, 3)
@@ -320,6 +400,7 @@ test_that("plot_freq two-vector comparison handles order parameter", {
   expect_equal(names(result_custom), c("value", "y2", "y1"))
 })
 
+#plot_freq_027
 test_that("plot_freq two-vector comparison handles missing values", {
   y1 <- c(1, 1, 2, NA, 2)
   y2 <- c(2, NA, 3, 3)
@@ -331,6 +412,7 @@ test_that("plot_freq two-vector comparison handles missing values", {
   expect_true(is.data.frame(result))
 })
 
+#plot_freq_028
 test_that("plot_freq two-vector comparison validates inputs", {
   y1 <- c(1, 1, 2, 2, 2)
   
@@ -347,52 +429,42 @@ test_that("plot_freq two-vector comparison validates inputs", {
   )
 })
 
-test_that("plot_freq two-vector with custom labels", {
+#plot_freq_029
+test_that("plot_freq two-vector uses deduced variable names", {
   y1 <- c(1, 1, 2, 2, 2)
   y2 <- c(2, 3, 3, 3)
   
-  # Custom labels
-  result <- plot_freq(y1, y2, labels = c("men", "women"))
+  result <- plot_freq(y1, y2)
   expect_true(is.data.frame(result))
-  expect_true("men" %in% names(result))
-  expect_true("women" %in% names(result))
+  expect_true("y1" %in% names(result))
+  expect_true("y2" %in% names(result))
 })
 
-test_that("plot_freq validates labels parameter", {
+#plot_freq_030
+test_that("plot_freq two-vector can resolve columns from data", {
+  set.seed(1)
+  y1 <- sample(100, replace = TRUE)
+  y2 <- sample(100, replace = TRUE)
+  df1 <- data.frame(a = y1, b = y2)
+  
+  expect_error(plot_freq(a, b, data = df1), NA)
+})
+
+#plot_freq_031
+test_that("plot_freq two-vector order parameter works", {
   y1 <- c(1, 1, 2, 2, 2)
   y2 <- c(2, 3, 3, 3)
   
-  # Wrong length
-  expect_error(
-    plot_freq(y1, y2, labels = c("men")),
-    "labels.*must be.*length 2"
-  )
+  # Reversed order
+  result <- plot_freq(y1, y2, order = -1)
+  expect_equal(names(result), c("value", "y2", "y1"))
   
-  expect_error(
-    plot_freq(y1, y2, labels = c("men", "women", "other")),
-    "labels.*must be.*length 2"
-  )
-  
-  # Wrong type
-  expect_error(
-    plot_freq(y1, y2, labels = c(1, 2)),
-    "labels.*must be.*character"
-  )
+  # Explicit order
+  result2 <- plot_freq(y1, y2, order = c("y2", "y1"))
+  expect_equal(names(result2), c("value", "y2", "y1"))
 })
 
-test_that("plot_freq custom labels work with order parameter", {
-  y1 <- c(1, 1, 2, 2, 2)
-  y2 <- c(2, 3, 3, 3)
-  
-  # Custom labels with reversed order
-  result <- plot_freq(y1, y2, labels = c("men", "women"), order = -1)
-  expect_equal(names(result), c("value", "women", "men"))
-  
-  # Custom labels with explicit order
-  result2 <- plot_freq(y1, y2, labels = c("men", "women"), order = c("women", "men"))
-  expect_equal(names(result2), c("value", "women", "men"))
-})
-
+#plot_freq_032
 test_that("plot_freq two-vector handles continuous data", {
   # Test with continuous data (runif, rnorm) which have floating point values
   set.seed(123)
@@ -406,6 +478,7 @@ test_that("plot_freq two-vector handles continuous data", {
   expect_true(is.data.frame(result))
 })
 
+#plot_freq_033
 test_that("plot_freq xlim includes all bars", {
   # Test that bars at edges are not clipped
   y1 <- c(1, 1, 2, 2, 3)
@@ -419,6 +492,18 @@ test_that("plot_freq xlim includes all bars", {
   expect_error(plot_freq(x), NA)
 })
 
+#plot_freq_034
+test_that("plot_freq uses pretty x-ticks for many unique values", {
+  # With >30 unique values, plot_freq should still run (and not attempt to label every x)
+    x <- 1:40
+    expect_error(plot_freq(x, ylim = c(0, 10)), NA)
+    
+  # Grouped path also should run
+    df <- data.frame(value = 1:40, group = rep(c("A", "B"), each = 20))
+    expect_error(plot_freq(value ~ group, data = df, ylim = c(0, 10)), NA)
+})
+
+#plot_freq_035
 test_that("plot_freq reserves space for legend", {
   y1 <- c(1, 1, 2, 2, 3)
   y2 <- c(1, 4, 4, 4)
@@ -430,57 +515,15 @@ test_that("plot_freq reserves space for legend", {
   expect_error(plot_freq(y1, y2, show.legend = FALSE), NA)
 })
 
-test_that("plot_freq labels parameter works correctly", {
+#plot_freq_036
+test_that("plot_freq two-vector supports col and freq args", {
   y1 <- c(1, 1, 2, 2, 2)
   y2 <- c(2, 3, 3, 3)
   
-  # Test with custom labels
-  result <- plot_freq(y1, y2, labels = c("before", "after"))
-  expect_true("before" %in% names(result))
-  expect_true("after" %in% names(result))
+  # col argument works
+  expect_error(plot_freq(y1, y2, col = c("blue", "pink")), NA)
   
-  # Test labels with colors
-  expect_error(plot_freq(y1, y2, labels = c("men", "women"), 
-                         col = c("blue", "pink")), NA)
-  
-  # Test labels with percentages
-  result_pct <- plot_freq(y1, y2, labels = c("group A", "group B"), freq = FALSE)
-  expect_true("group A" %in% names(result_pct))
-  expect_true("group B" %in% names(result_pct))
-})
-
-test_that("plot_freq labels validation works", {
-  y1 <- c(1, 1, 2)
-  y2 <- c(2, 3, 3)
-  
-  # Labels must be character
-  expect_error(
-    plot_freq(y1, y2, labels = c(1, 2)),
-    "character vector"
-  )
-  
-  # Labels must be length 2
-  expect_error(
-    plot_freq(y1, y2, labels = c("one")),
-    "length 2"
-  )
-  
-  expect_error(
-    plot_freq(y1, y2, labels = c("one", "two", "three")),
-    "length 2"
-  )
-})
-
-test_that("plot_freq labels work with order parameter", {
-  y1 <- c(1, 1, 2)
-  y2 <- c(2, 3, 3)
-  
-  # Custom labels with custom order
-  result <- plot_freq(y1, y2, labels = c("first", "second"), 
-                      order = c("second", "first"))
-  expect_equal(names(result), c("value", "second", "first"))
-  
-  # Custom labels with reversed order
-  result2 <- plot_freq(y1, y2, labels = c("A", "B"), order = -1)
-  expect_equal(names(result2), c("value", "B", "A"))
+  # Percentages work
+  result_pct <- plot_freq(y1, y2, freq = FALSE)
+  expect_true(is.data.frame(result_pct))
 })

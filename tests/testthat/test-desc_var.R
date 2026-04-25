@@ -1,3 +1,4 @@
+#desc_var_001
 test_that("desc_var computes statistics correctly", {
   y <- rnorm(100)
   group <- rep(c("A", "B"), 50)
@@ -13,15 +14,16 @@ test_that("desc_var computes statistics correctly", {
   expect_true("median" %in% names(result))
 })
 
+#desc_var_002
 test_that("desc_var handles data frame input", {
   df <- data.frame(value = rnorm(100), group = rep(c("A", "B"), 50))
   
   result <- desc_var(value, group, data = df)
   expect_equal(nrow(result), 2)
-  # desc_var uses labelled package which adds attributes, so we need to convert to character
   expect_equal(as.character(result$group), c("A", "B"))
 })
 
+#desc_var_003
 test_that("desc_var works when column names match parameter names (y, group)", {
   # This test catches a bug where using column names that match function 
 
@@ -36,15 +38,16 @@ test_that("desc_var works when column names match parameter names (y, group)", {
   expect_equal(sum(as.numeric(result$n.total)), 100)
 })
 
+#desc_var_004
 test_that("desc_var handles no grouping", {
   y <- rnorm(100)
   
   result <- desc_var(y)
   expect_equal(nrow(result), 1)
-  # desc_var uses labelled package which adds attributes, so we need to convert to character
   expect_equal(as.character(result$group), "All")
 })
 
+#desc_var_005
 test_that("desc_var handles missing values", {
   y <- c(rnorm(90), rep(NA, 10))
   group <- rep(c("A", "B"), 50)
@@ -54,6 +57,7 @@ test_that("desc_var handles missing values", {
   expect_true(sum(result$n.missing) == 10)
 })
 
+#desc_var_006
 test_that("desc_var respects digits parameter", {
   y <- rnorm(100)
   group <- rep(c("A", "B"), 50)
@@ -71,6 +75,7 @@ test_that("desc_var respects digits parameter", {
   expect_true(is.data.frame(result2))
 })
 
+#desc_var_007
 test_that("desc_var returns all expected columns", {
   y <- rnorm(100)
   group <- rep(c("A", "B"), 50)
@@ -84,6 +89,7 @@ test_that("desc_var returns all expected columns", {
   expect_true(all(expected_cols %in% names(result)))
 })
 
+#desc_var_008
 test_that("desc_var handles empty groups", {
   y <- c(rnorm(50), rep(NA, 50))
   group <- rep(c("A", "B"), 50)
@@ -94,6 +100,7 @@ test_that("desc_var handles empty groups", {
   expect_equal(nrow(result), 2)
 })
 
+#desc_var_009
 test_that("desc_var handles formula syntax", {
   df <- data.frame(y = rnorm(100), group = rep(c("A", "B"), 50))
   
@@ -102,6 +109,7 @@ test_that("desc_var handles formula syntax", {
   expect_equal(as.character(result$group), c("A", "B"))
 })
 
+#desc_var_010
 test_that("desc_var handles multiple grouping variables", {
   df <- data.frame(
     y = rnorm(200),
@@ -116,6 +124,7 @@ test_that("desc_var handles multiple grouping variables", {
   expect_false("group" %in% names(result))  # Should use separate columns, not "group"
 })
 
+#desc_var_011
 test_that("desc_var sorts results by grouping variables", {
   df <- data.frame(
     y = rnorm(200),
@@ -124,11 +133,12 @@ test_that("desc_var sorts results by grouping variables", {
   )
   
   result <- desc_var(y ~ x1 + x2, data = df)
-  # Results should be sorted by x1 then x2
-  expect_equal(as.character(result$x1), c("A", "A", "B", "B"))
-  expect_equal(as.character(result$x2), c("X", "Y", "X", "Y"))
+  # Results should be sorted by x2 then x1 (right-to-left in formula)
+  expect_equal(as.character(result$x1), c("A", "B", "A", "B"))
+  expect_equal(as.character(result$x2), c("X", "X", "Y", "Y"))
 })
 
+#desc_var_012
 test_that("desc_var detects missing group combinations", {
   df <- data.frame(
     y = rnorm(100),
@@ -145,6 +155,7 @@ test_that("desc_var detects missing group combinations", {
   )
 })
 
+#desc_var_013
 test_that("desc_var detects perfectly overlapping grouping variables", {
   df <- data.frame(
     y = rnorm(100),
@@ -163,6 +174,7 @@ test_that("desc_var detects perfectly overlapping grouping variables", {
 # EDGE CASES
 # ============================================================================
 
+#desc_var_014
 test_that("desc_var handles single observation per group", {
   df <- data.frame(
     y = c(1, 2, 3),
@@ -177,6 +189,7 @@ test_that("desc_var handles single observation per group", {
   expect_true(all(is.na(result$sd)))
 })
 
+#desc_var_015
 test_that("desc_var handles all-NA values in y", {
   df <- data.frame(
     y = rep(NA_real_, 20),
@@ -187,12 +200,13 @@ test_that("desc_var handles all-NA values in y", {
   
   expect_equal(nrow(result), 2)
   # Missing should equal total observations per group
-  expect_true(all(as.numeric(result$missing) == 10))
+  expect_true(all(as.numeric(result$n.missing) == 10))
   # n (non-missing) should be 0
   # Note: desc_var may define n differently - just check structure is valid
   expect_true(is.data.frame(result))
 })
 
+#desc_var_016
 test_that("desc_var handles single group", {
   y <- rnorm(50)
   
@@ -203,13 +217,13 @@ test_that("desc_var handles single group", {
   expect_equal(as.numeric(result$n.total), 50)
 })
 
+#desc_var_017
 test_that("desc_var correctly computes all statistics", {
   # Use known data for exact verification
   y <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
   
   result <- desc_var(y)
   
-  # Use as.numeric() to strip labelled attributes
   expect_equal(as.numeric(result$n.total), 10)
   expect_equal(as.numeric(result$mean), 5.5, tolerance = 1e-2)  # Allow for rounding
   expect_equal(as.numeric(result$median), 5.5, tolerance = 1e-2)
@@ -219,6 +233,7 @@ test_that("desc_var correctly computes all statistics", {
   expect_equal(as.numeric(result$sd), sd(y), tolerance = 0.01)
 })
 
+#desc_var_018
 test_that("desc_var digits parameter actually rounds differently", {
   y <- c(1.23456789, 2.34567891, 3.45678912)
   
@@ -229,4 +244,66 @@ test_that("desc_var digits parameter actually rounds differently", {
   # 2.35 (2 digits) vs 2.3457 (4 digits)
   expect_true(nchar(format(result2$mean, nsmall = 2)) < nchar(format(result4$mean, nsmall = 4)) ||
               result2$mean != result4$mean)
+})
+
+#desc_var_019
+test_that("desc_var errors clearly for non-numeric y", {
+  df <- data.frame(
+    y_char = as.character(1:10),
+    y_factor = factor(1:10),
+    group = rep(c("A", "B"), each = 5)
+  )
+
+  # Non-formula, data frame input
+  expect_error(
+    desc_var(y_char, group, data = df),
+    "'y_char' must be numeric; currently character"
+  )
+
+  # Formula syntax
+  expect_error(
+    desc_var(y_char ~ group, data = df),
+    "'y_char' must be numeric; currently character"
+  )
+
+  # Factor response
+  expect_error(
+    desc_var(y_factor ~ group, data = df),
+    "'y_factor' must be numeric; currently factor"
+  )
+})
+
+#desc_var_020
+test_that("desc_var still errors when variable truly does not exist", {
+  df <- data.frame(
+    y = rnorm(10),
+    group = rep(c("A", "B"), each = 5)
+  )
+
+  expect_error(
+    desc_var(nonexistent, group, data = df),
+    "'nonexistent' not found in data"
+  )
+
+  expect_error(
+    desc_var(nonexistent ~ group, data = df),
+    "'nonexistent' not found in data"
+  )
+})
+
+#desc_var_021
+test_that("desc_var evaluates df$col expressions before numeric validation", {
+  df <- data.frame(x = 1:10)
+
+  # Numeric expression works
+  result <- desc_var(df$x)
+  expect_true(is.data.frame(result))
+  expect_equal(as.numeric(result$mean), 5.5)
+
+  # Existing but non-numeric expression gives numeric-type error (not not-found)
+  df$x <- "a"
+  expect_error(
+    desc_var(df$x),
+    "'x' must be numeric; currently character"
+  )
 })

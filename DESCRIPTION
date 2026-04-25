@@ -1,11 +1,13 @@
 Package: statuser
 Type: Package
 Title: Statistical Tools Designed for End Users
-Version: 0.1.9
+Version: 0.2.1
 Authors@R: person(given = "Uri",
                   family = "Simonsohn",
                   role = c("aut", "cre"),
                   email = "urisohn@gmail.com")
+Author: Uri Simonsohn [aut, cre]
+Maintainer: Uri Simonsohn <urisohn@gmail.com>
 Description: The statistical tools in this package do one of four things:
     1) Enhance basic statistical functions with more 
     flexible inputs, smarter defaults, and richer, clearer, and ready-to-use 
@@ -17,13 +19,11 @@ Description: The statistical tools in this package do one of four things:
 License: GPL-3
 Encoding: UTF-8
 RoxygenNote: 7.3.3
-Imports: mgcv, rsvg, magick, labelled, sandwich, lmtest, utils
-Suggests: testthat (>= 3.0.0), crayon, quantreg, estimatr,
-        marginaleffects, broom, modelsummary
+Imports: mgcv, marginaleffects, rsvg, magick, sandwich, lmtest, utils
+Suggests: testthat (>= 3.0.0), crayon, quantreg, estimatr, broom,
+        modelsummary
 Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2026-02-26 13:19:06 UTC; uri_s
-Author: Uri Simonsohn [aut, cre]
-Maintainer: Uri Simonsohn <urisohn@gmail.com>
+Packaged: 2026-04-25 11:42:09 UTC; uri_s
 Repository: CRAN
-Date/Publication: 2026-02-26 13:40:02 UTC
+Date/Publication: 2026-04-25 12:00:02 UTC

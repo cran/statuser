@@ -35,9 +35,16 @@ A data frame with one row per group (or one row if no group is specified) contai
     \item \code{n.missing}: Number of observations with missing (NA) values
     \item \code{n.unique}: Number of unique values
   }
+  Columns may also carry a \code{"label"} attribute, which provides a short
+  human-readable description of each column.
 }
 \description{
-Returns a dataframe with one row per group
+Returns a dataframe with one row per group.
+}
+\details{
+The dependent variable (`y`) must be numeric. If you pass an existing
+non-numeric variable (e.g., character, factor), `desc_var()` will stop with
+a clear error indicating that the variable must be numeric.
 }
 \examples{
 # With grouping

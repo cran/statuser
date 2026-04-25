@@ -1,6 +1,10 @@
 #' Describe a variable, optionally by groups
 #'
-#' Returns a dataframe with one row per group
+#' Returns a dataframe with one row per group.
+#'
+#' The dependent variable (`y`) must be numeric. If you pass an existing
+#' non-numeric variable (e.g., character, factor), `desc_var()` will stop with
+#' a clear error indicating that the variable must be numeric.
 #'
 #' @param y A numeric vector of values, a column name (character string or unquoted) if \code{data} is provided,
 #'   or a formula of the form \code{y ~ x} or \code{y ~ x1 + x2} (for multiple grouping variables).
@@ -26,6 +30,8 @@
 #'     \item \code{n.missing}: Number of observations with missing (NA) values
 #'     \item \code{n.unique}: Number of unique values
 #'   }
+#'   Columns may also carry a \code{"label"} attribute, which provides a short
+#'   human-readable description of each column.
 #'
 #'
 #' @examples
@@ -60,7 +66,7 @@ desc_var <- function(y, group = NULL, data = NULL, digits = 3) {
   # 3. Define helper function to compute statistics for a vector
   # 4. Compute statistics (either for full dataset or by group)
   # 5. Round numeric columns to specified decimal places
-  # 6. Add descriptive labels to columns using labelled package
+  # 6. Add descriptive labels to columns as attributes
   # 7. Return result dataframe
   
   # Helper function to format error messages with conditional newline
@@ -207,16 +213,34 @@ desc_var <- function(y, group = NULL, data = NULL, digits = 3) {
       y <- data[[y_name]]
     } else {
       # No data: evaluate from calling environment
-      y_exists <- exists(y_name, envir = calling_env, inherits = TRUE)
-      if (!y_exists) {
-        # y might already be a vector passed directly, check if it's numeric
-        if (is.numeric(y) && is.vector(y)) {
-          # y is already evaluated, use it as-is
-        } else {
-          message2(format_msg(sprintf("'%s' not found", y_name)), col = 'red', stop = TRUE)
-        }
+      # If the call was df$x (or other call), always eval that expression — do not
+      # use get("x"), which can pick up a wrong object when bare `x` exists.
+      if (is.call(y_expr)) {
+        y <- tryCatch(
+          eval(y_expr, envir = calling_env),
+          error = function(e) {
+            message2(
+              format_msg(sprintf("'%s' could not be evaluated", y_name_raw)),
+              col = "red",
+              stop = TRUE
+            )
+          }
+        )
       } else {
-        y <- get(y_name, envir = calling_env)
+        y_exists <- exists(y_name, envir = calling_env, inherits = TRUE)
+        if (!y_exists) {
+          y_eval <- tryCatch(
+            eval(y_expr, envir = calling_env),
+            error = function(e) NULL
+          )
+          if (is.null(y_eval)) {
+            message2(format_msg(sprintf("'%s' not found", y_name)), col = 'red', stop = TRUE)
+          } else {
+            y <- y_eval
+          }
+        } else {
+          y <- get(y_name, envir = calling_env)
+        }
       }
     }
     
@@ -231,17 +255,29 @@ desc_var <- function(y, group = NULL, data = NULL, digits = 3) {
         }
         group <- data[[group_name]]
       } else {
-        # No data: evaluate from calling environment
-        group_exists <- exists(group_name, envir = calling_env, inherits = TRUE)
-        if (!group_exists) {
-          # group might already be a vector passed directly
-          if (is.vector(group)) {
-            # group is already evaluated, use it as-is
-          } else {
-            message2(format_msg(sprintf("'%s' not found", group_name)), col = 'red', stop = TRUE)
-          }
+        # No data: evaluate from calling environment (same rule as y: calls like df$g first)
+        if (is.call(group_expr)) {
+          group <- tryCatch(
+            eval(group_expr, envir = calling_env),
+            error = function(e) {
+              message2(
+                format_msg(sprintf("'%s' could not be evaluated", group_name_raw)),
+                col = "red",
+                stop = TRUE
+              )
+            }
+          )
         } else {
-          group <- get(group_name, envir = calling_env)
+          group_exists <- exists(group_name, envir = calling_env, inherits = TRUE)
+          if (!group_exists) {
+            if (is.vector(group)) {
+              # group is already evaluated, use it as-is
+            } else {
+              message2(format_msg(sprintf("'%s' not found", group_name)), col = 'red', stop = TRUE)
+            }
+          } else {
+            group <- get(group_name, envir = calling_env)
+          }
         }
       }
       
@@ -261,7 +297,12 @@ desc_var <- function(y, group = NULL, data = NULL, digits = 3) {
   # 2. Validate inputs
   # 2.1. Validate that y is numeric
   if (!is.numeric(y)) {
-    message2(format_msg(sprintf("The dv is numeric: '%s' is not numeric", y_name)), col = 'red', stop = TRUE)
+    y_class <- paste(class(y), collapse = "/")
+    message2(
+      format_msg(sprintf("'%s' must be numeric; currently %s", y_name, y_class)),
+      col = "red",
+      stop = TRUE
+    )
   }
   
   # 2.2. Check that multiple grouping variables do not overlap perfectly (formula syntax only)
@@ -490,8 +531,9 @@ desc_var <- function(y, group = NULL, data = NULL, digits = 3) {
     
     # Sort by grouping variables
       if (use_separate_group_cols && !is.null(group_list)) {
-        # Sort by all grouping variables in order
-        sort_cols <- names(group_list)
+        # Sort by grouping variables from right to left in formula
+        # y ~ x1 + x2 + x3  => sort by x3, then x2, then x1
+        sort_cols <- rev(names(group_list))
         result_df <- result_df[do.call(order, result_df[sort_cols]), , drop = FALSE]
       } else if (!is.null(group)) {
         # Sort by single group column
@@ -513,7 +555,7 @@ desc_var <- function(y, group = NULL, data = NULL, digits = 3) {
     result_df$mode2 <- ifelse(is.na(result_df$mode2), "-", as.character(result_df$mode2))
     result_df$freq_mode2 <- ifelse(is.na(result_df$freq_mode2), "-", as.character(result_df$freq_mode2))
     
-  # 6. Add descriptive labels to columns using labelled package
+  # 6. Add descriptive labels to columns as attributes
     label_list <- list(
       group = "Group identifier",
       mean = "Mean",
@@ -541,7 +583,7 @@ desc_var <- function(y, group = NULL, data = NULL, digits = 3) {
     }
   
   # Only include labels for columns that exist
-  labelled::var_label(result_df) <- label_list[names(result_df)]
+    var_labels(result_df) <- label_list
   
   rownames(result_df) <- NULL
   
