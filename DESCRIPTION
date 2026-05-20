@@ -1,11 +1,12 @@
 Package: statuser
 Type: Package
 Title: Statistical Tools Designed for End Users
-Version: 0.2.1
-Authors@R: person(given = "Uri",
-                  family = "Simonsohn",
-                  role = c("aut", "cre"),
-                  email = "urisohn@gmail.com")
+Version: 0.3.0
+Authors@R: c(
+    person(given = "Uri",
+           family = "Simonsohn",
+           role = c("aut", "cre"),
+           email = "urisohn@gmail.com"))
 Author: Uri Simonsohn [aut, cre]
 Maintainer: Uri Simonsohn <urisohn@gmail.com>
 Description: The statistical tools in this package do one of four things:
@@ -19,11 +20,13 @@ Description: The statistical tools in this package do one of four things:
 License: GPL-3
 Encoding: UTF-8
 RoxygenNote: 7.3.3
-Imports: mgcv, marginaleffects, rsvg, magick, sandwich, lmtest, utils
+Imports: mgcv, marginaleffects, rsvg, magick, sandwich, lmtest,
+        lmerTest, digest, beeswarm, utils
 Suggests: testthat (>= 3.0.0), crayon, quantreg, estimatr, broom,
         modelsummary
 Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2026-04-25 11:42:09 UTC; uri_s
+Packaged: 2026-05-20 20:24:19 UTC; uri_s
+Depends: R (>= 3.5.0)
 Repository: CRAN
-Date/Publication: 2026-04-25 12:00:02 UTC
+Date/Publication: 2026-05-20 20:50:02 UTC
