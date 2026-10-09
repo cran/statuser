@@ -102,7 +102,8 @@ test_that("backend: interprobe JN output matches marginaleffects slopes and regi
     histogram = FALSE,
     quiet = TRUE,
     spotlights = spotlights,
-    probe.bins = probe_bins
+    probe.bins = probe_bins,
+    moderator.on.x.axis = TRUE
   )
   
   jn_ref_list <- lapply(spotlights, function(xj) {

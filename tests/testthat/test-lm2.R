@@ -996,6 +996,7 @@ test_that("lm2 chops near-zero noise to zero in default print", {
     final_grade ~ writeups + b_points + participation + final_project + exam,
     data = df
   )
+  tbl <- attr(result, "statuser_table")
   output <- capture.output(print(result))
   output_text <- paste(output, collapse = "\n")
 
@@ -1003,7 +1004,14 @@ test_that("lm2 chops near-zero noise to zero in default print", {
   expect_false(grepl("e-", output_text, ignore.case = TRUE))
   expect_match(output_text, "participation")
   expect_match(output_text, "\\.000")
-  expect_match(output_text, ">999")
+  # estimatr 2.0.1+: exact fits return NA SE/t/p (printed as --);
+  # older estimatr returned tiny SEs and huge t (printed as >999)
+  if (anyNA(tbl$t)) {
+    expect_match(output_text, "--")
+    expect_false(grepl(">999", output_text, fixed = TRUE))
+  } else {
+    expect_match(output_text, ">999")
+  }
 })
 
 #lm2_052
@@ -1028,13 +1036,21 @@ test_that("lm2 round argument forces uniform decimal places", {
   )
   expect_equal(attr(result, "round"), 3)
 
+  tbl <- attr(result, "statuser_table")
   output <- capture.output(print(result))
   output_text <- paste(output, collapse = "\n")
 
   expect_match(output_text, "round = 3")
-  expect_match(output_text, "20\\.000\\*\\*")
-  expect_match(output_text, "writeups\\s+\\.200\\*\\*")
   expect_match(output_text, "participation\\s+\\.000")
+  # Stars require defined p-values; estimatr 2.0.1+ leaves them NA on exact fits
+  if (anyNA(tbl$p.value)) {
+    expect_match(output_text, "20\\.000")
+    expect_match(output_text, "writeups\\s+\\.200")
+    expect_false(grepl("20\\.000\\*\\*", output_text))
+  } else {
+    expect_match(output_text, "20\\.000\\*\\*")
+    expect_match(output_text, "writeups\\s+\\.200\\*\\*")
+  }
 })
 
 #lm2_053

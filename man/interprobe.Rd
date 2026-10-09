@@ -10,7 +10,7 @@ interprobe(
   y = NULL,
   model = NULL,
   data = NULL,
-  moderator.on.x.axis = TRUE,
+  moderator.on.x.axis = "auto",
   k = NULL,
   spotlights = NULL,
   spotlight.labels = NULL,
@@ -54,7 +54,12 @@ argument to interprobe. This is the way to include covariates for a probed inter
 
 \item{data}{Optional data frame containing `x`, `z`, and `y`.}
 
-\item{moderator.on.x.axis}{Logical. If TRUE (default), moderator (`z`) is shown on the x-axis.}
+\item{moderator.on.x.axis}{Controls which variable is shown on the x-axis. The default
+is `"auto"`, can also be set to `TRUE` or `FALSE`. In `"auto"`, for binary focal
+predictors (e.g., two conditions in an experiment) it places the moderator on the
+x-axis, and for predictors with more than 3 possible values it puts the predictor
+on the x-axis. When set to `TRUE` it will force the moderator to be on the x-axis
+and when set to `FALSE` it will force the focal predictor on the x-axis.}
 
 \item{k}{Integer. Smoothness parameter passed to `mgcv::gam()` when estimating with the default
 GAM engine.}
@@ -77,7 +82,9 @@ GAM engine.}
 
 \item{ylab2}{Character. Y-axis label for JN panel.}
 
-\item{cols}{Character vector of length 3. Colors for the three curves.}
+\item{cols}{Character vector of length 2 or 3. Colors for the curves.
+Length 2 is allowed when the focal predictor has exactly two levels;
+otherwise length 3 is required (three spotlights or up to three categorical levels).}
 
 \item{main1}{Character. Title for simple slopes panel.}
 

@@ -91,6 +91,81 @@ test_that("stimulus.plot effects returns expected structure", {
 })
 
 #stimulus.plot_003
+test_that("stimulus.plot effects with null.method demean runs", {
+  dat <- stimulus_test_data()
+  grDevices::pdf(tempfile(fileext = ".pdf"))
+  on.exit(grDevices::dev.off(), add = TRUE)
+  clear_stimulus_cache()
+  set.seed(2024)
+
+  res <- stimulus.plot(
+    data = dat$df1, dv = "rev", stimulus = "stimulus", condition = "cond",
+    plot.type = "effects", null.method = "demean", simtot = 20,
+    participant = "id", watermark = FALSE, seed = 2024
+  )
+
+  expect_true(is.list(res))
+  expect_true(all(c("observed", "under.null", "resamples", "p.hetero") %in% names(res)))
+  expect_true(is.data.frame(res$observed))
+})
+
+#stimulus.plot_003b
+test_that("flip.conditions mean column names match true condition means", {
+  dat <- stimulus_test_data()
+  df <- dat$df2
+  grDevices::pdf(tempfile(fileext = ".pdf"))
+  on.exit(grDevices::dev.off(), add = TRUE)
+  clear_stimulus_cache()
+
+  obs <- stimulus.plot(
+    data = df, dv = "rev", stimulus = "stimulus", condition = "cond",
+    plot.type = "means", flip.conditions = TRUE, watermark = FALSE
+  )
+
+  true <- aggregate(rev ~ stimulus + cond, data = df, FUN = mean)
+  for (lev in sort(unique(df$cond))) {
+    col <- paste0("cond_", lev)
+    expect_true(col %in% names(obs))
+    tlev <- true[true$cond == lev, c("stimulus", "rev")]
+    names(tlev)[2] <- "true_m"
+    m <- merge(obs[, c("stimulus", col)], tlev, by = "stimulus")
+    expect_equal(m[[col]], m$true_m, tolerance = 1e-6)
+  }
+})
+
+#stimulus.plot_003c
+test_that("demean with flip.conditions reports p consistent with returned objects", {
+  dat <- stimulus_test_data()
+  grDevices::pdf(tempfile(fileext = ".pdf"))
+  on.exit(grDevices::dev.off(), add = TRUE)
+  clear_stimulus_cache()
+  set.seed(2024)
+
+  res <- stimulus.plot(
+    data = dat$df1, dv = "rev", stimulus = "stimulus", condition = "cond",
+    plot.type = "effects", null.method = "demean", flip.conditions = TRUE,
+    simtot = 20, participant = "id", watermark = FALSE, seed = 2024
+  )
+
+  d.obs <- res$observed$effect
+  dM <- res$under.null$mean
+  e2.obs <- sum((dM - d.obs)^2)
+  e2.rows <- (sweep(as.matrix(res$resamples), 2, dM, FUN = "-"))^2
+  p.recomputed <- mean(rowSums(e2.rows) >= e2.obs)
+
+  p.txt <- res$p.hetero
+  expect_true(is.character(p.txt))
+  if (grepl("^p<", p.txt)) {
+    expect_true(p.recomputed == 0 || p.recomputed < 1 / nrow(res$resamples) + 1e-12)
+  } else if (grepl("^p>", p.txt)) {
+    expect_true(p.recomputed > 0.9999)
+  } else {
+    p.reported <- as.numeric(sub("^p=", "", p.txt))
+    expect_equal(p.reported, p.recomputed, tolerance = 1e-8)
+  }
+})
+
+#stimulus.plot_004
 test_that("stimulus.plot errors for compared-stimulus design", {
   dat <- stimulus_test_data()
   df_comp <- stimulus_compared_data(dat$df1)
@@ -116,7 +191,7 @@ test_that("stimulus.plot errors for compared-stimulus design", {
   expect_true(any(grepl("stimulus.beeswarm", msgs, fixed = TRUE)))
 })
 
-#stimulus.plot_004
+#stimulus.plot_005
 test_that("stimulus.beeswarm runs on compared-stimulus subset", {
   dat <- stimulus_test_data()
   grDevices::pdf(tempfile(fileext = ".pdf"))
@@ -133,7 +208,7 @@ test_that("stimulus.beeswarm runs on compared-stimulus subset", {
   expect_equal(ncol(res), 2)
 })
 
-#stimulus.plot_005
+#stimulus.plot_006
 test_that("clear_stimulus_cache resets package cache", {
   dat <- stimulus_test_data()
   grDevices::pdf(tempfile(fileext = ".pdf"))
@@ -151,7 +226,7 @@ test_that("clear_stimulus_cache resets package cache", {
   expect_equal(statuser:::sp_stimulus_cache(), list())
 })
 
-#stimulus.plot_006
+#stimulus.plot_007
 test_that("Salerno & Slepian effects with simtot=20 matches saved reference", {
   dat <- stimulus_test_data()
   grDevices::pdf(tempfile(fileext = ".pdf"))
@@ -169,7 +244,7 @@ test_that("Salerno & Slepian effects with simtot=20 matches saved reference", {
   expect_stimulus_effects_matches_saved(r1, readRDS(fp))
 })
 
-#stimulus.plot_007
+#stimulus.plot_008
 test_that("Salerno & Slepian means matches saved reference", {
   dat <- stimulus_test_data()
   grDevices::pdf(tempfile(fileext = ".pdf"))
@@ -186,7 +261,7 @@ test_that("Salerno & Slepian means matches saved reference", {
   expect_stimulus_means_matches_saved(r2, readRDS(fp))
 })
 
-#stimulus.plot_008
+#stimulus.plot_009
 test_that("Salerno & Slepian model=all subset matches saved reference", {
   skip_if_not(requireNamespace("lmerTest", quietly = TRUE))
   dat <- stimulus_test_data()

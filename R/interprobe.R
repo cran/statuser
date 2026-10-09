@@ -16,7 +16,12 @@
 #' model of your choice by running it separately, saving the output, and submitting it as the model 
 #' argument to interprobe. This is the way to include covariates for a probed interaction.
 #' @param data Optional data frame containing `x`, `z`, and `y`.
-#' @param moderator.on.x.axis Logical. If TRUE (default), moderator (`z`) is shown on the x-axis.
+#' @param moderator.on.x.axis Controls which variable is shown on the x-axis. The default
+#'   is `"auto"`, can also be set to `TRUE` or `FALSE`. In `"auto"`, for binary focal
+#'   predictors (e.g., two conditions in an experiment) it places the moderator on the
+#'   x-axis, and for predictors with more than 3 possible values it puts the predictor
+#'   on the x-axis. When set to `TRUE` it will force the moderator to be on the x-axis
+#'   and when set to `FALSE` it will force the focal predictor on the x-axis.
 #' @param k Integer. Smoothness parameter passed to `mgcv::gam()` when estimating with the default
 #'   GAM engine. 
 #' @param spotlights Numeric vector of length 3. Values at which curves are computed.
@@ -26,7 +31,9 @@
 #' @param n.bin.continuous Integer. Number of bins used in histogram when binning continuous values.
 #' @param n.max Integer. Sample size at which line darkness/width saturates.
 #' @param xlab Character. X-axis label.
-#' @param cols Character vector of length 3. Colors for the three curves.
+#' @param cols Character vector of length 2 or 3. Colors for the curves.
+#'   Length 2 is allowed when the focal predictor has exactly two levels;
+#'   otherwise length 3 is required (three spotlights or up to three categorical levels).
 #' @param ylab1 Character. Y-axis label for simple slopes panel.
 #' @param ylab2 Character. Y-axis label for JN panel.
 #' @param main1 Character. Title for simple slopes panel.
@@ -62,7 +69,7 @@
 #' @export
 interprobe <- function( x = NULL, z = NULL, y = NULL,
   model = NULL,  data = NULL,
-  moderator.on.x.axis = TRUE,
+  moderator.on.x.axis = "auto",
   k = NULL,
   spotlights = NULL, spotlight.labels = NULL,
   histogram = TRUE, max.unique = 11,n.bin.continuous = 10,n.max = 50,
@@ -76,11 +83,16 @@ interprobe <- function( x = NULL, z = NULL, y = NULL,
   quiet = FALSE,
   probe.bins = 100
 ) {
-  xvar <- ip_clean_string(deparse(substitute(x)))
-  zvar <- ip_clean_string(deparse(substitute(z)))
-  yvar <- ip_clean_string(deparse(substitute(y)))
-
+  # Capture names without evaluating x/z/y (bare names may exist only in data=/model)
   mc <- match.call(expand.dots = FALSE)
+  provided_x <- "x" %in% names(mc)
+  provided_z <- "z" %in% names(mc)
+  provided_y <- "y" %in% names(mc)
+  xvar <- if (provided_x) ip_clean_string(deparse(substitute(x))) else NULL
+  zvar <- if (provided_z) ip_clean_string(deparse(substitute(z))) else NULL
+  yvar <- if (provided_y) ip_clean_string(deparse(substitute(y))) else NULL
+  dataname <- if (!is.null(data)) paste(deparse(substitute(data)), collapse = "") else NULL
+
   model_label <- NULL
   if ("model" %in% names(mc)) {
     model_label <- paste0(deparse(mc[["model"]]), collapse = " ")
@@ -98,16 +110,24 @@ interprobe <- function( x = NULL, z = NULL, y = NULL,
     attr(model, "interprobe_modelname") <- model_label
   }
 
-  if (!is.null(data)) {
-    if (is.null(x) | is.null(z) | is.null(y)) exit("interprobe says(): you must specify 'x', 'z' and 'y'")
-    x <- xvar
-    z <- zvar
-    y <- yvar
+  # With data= or model=, treat x/z/y as names — do not force env evaluation
+  if (!is.null(data) || !is.null(model)) {
+    if (!is.null(data) && (!provided_x || !provided_z || !provided_y)) {
+      exit("interprobe says(): you must specify 'x', 'z' and 'y'")
+    }
+    if (provided_x) x <- xvar
+    if (provided_z) z <- zvar
+    if (provided_y) y <- yvar
   }
 
   # Run before ip_validate_arguments() so missing x/z with model=... hits the
   # intended message instead of failing on focal variable ('NULL') not in model.
-  v <- ip_validate_input_combinations(data, model, x, y, z)
+  v <- ip_validate_input_combinations(
+    data, model,
+    x = if (provided_x) xvar else NULL,
+    y = if (provided_y) yvar else NULL,
+    z = if (provided_z) zvar else NULL
+  )
   if (v$input.model == TRUE) yvar <- all.vars(terms(model))[1]
 
   ip_validate_arguments(
@@ -125,14 +145,9 @@ interprobe <- function( x = NULL, z = NULL, y = NULL,
     save.as,
     xvar, zvar, yvar,
     x.ticks, y1.ticks, y2.ticks,
-    moderator.on.x.axis
+    moderator.on.x.axis,
+    dataname = dataname
   )
-
-  if (!is.null(data)) {
-    x <- xvar
-    z <- zvar
-    y <- yvar
-  }
 
   if (quiet == FALSE) {
     cat(paste0("Probing the interaction of '", xvar, "' * '", zvar, "'\n"))
@@ -162,18 +177,30 @@ interprobe <- function( x = NULL, z = NULL, y = NULL,
   if (nux <= max.unique & nux > 3) focal <- "discrete"
   if (nux <= 3) focal <- "categorical"
 
+  # cols length: categorical needs one color per x level; spotlights need 3
+  if (focal == "categorical") {
+    if (length(cols) < nux) {
+      exit(
+        paste0(
+          "interprobe() says: with ", nux, " levels of the focal predictor '",
+          xvar, "', 'cols' must have length at least ", nux,
+          " (got ", length(cols), ")"
+        )
+      )
+    }
+  } else if (length(cols) < 3) {
+    exit(
+      paste0(
+        "interprobe() says: for continuous/discrete focal predictors, 'cols' must ",
+        "have length 3 (got ", length(cols), ")"
+      )
+    )
+  }
+
   if (nuz > max.unique) moderation <- "continuous"
   if (nuz <= max.unique) moderation <- "discrete"
 
-  if (nux <= 3 & moderator.on.x.axis == FALSE) {
-    message(
-      paste0(
-        "interprobe() says: Less than 3 unique values for x variable ('", xvar, "').\n",
-        "Will ignore request to have it on the x-axis"
-      )
-    )
-    moderator.on.x.axis <- TRUE
-  }
+  moderator.on.x.axis <- ip_resolve_moderator_on_x_axis(moderator.on.x.axis, nux, max.unique)
 
   if (moderation == "continuous") zs <- seq(min(data[, zvar]), max(data[, zvar]), length.out = probe.bins)
   if (moderation == "discrete") zs <- uz
@@ -236,7 +263,11 @@ interprobe <- function( x = NULL, z = NULL, y = NULL,
     }
   }
 
-  if (is.null(spotlights) & focal != "categorical") {
+  need_spotlights <- is.null(spotlights) && (
+    focal != "categorical" ||
+      (focal == "categorical" && moderator.on.x.axis == FALSE && moderation == "continuous")
+  )
+  if (need_spotlights) {
     if (moderator.on.x.axis == FALSE) spotvar <- data[, zvar]
     if (moderator.on.x.axis == TRUE) spotvar <- data[, xvar]
 
@@ -386,7 +417,7 @@ interprobe <- function( x = NULL, z = NULL, y = NULL,
 
   regions.jn <- "N/A"
   if (draw2 != "simple slopes" & quiet == FALSE & focal == "categorical") {
-    regions.jn <- ip_get_regions_jn(df2, xvar, zvar, focal, probe.bins)
+    regions.jn <- ip_get_regions_jn(df2, xvar, zvar, focal, probe.bins, data)
     cat(regions.jn)
   }
 

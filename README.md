@@ -45,6 +45,7 @@ Same organization as `help(statuser)`:
 ### Formatting
 
 - `format_pvalue()` — format p-values for display
+- `round2()` — like `round()`, but fixed decimals as character; optional drop of leading zeros
 - `var_labels()` — get/set variable labels (as base-R `"label"` attributes)
 - `message2()` — print colored messages to console
 - `resize_images()` — resize images (SVG, PDF, EPS, JPG, PNG, etc.) to PNG with specified width
@@ -273,6 +274,16 @@ format_pvalue(0.0001, include_p = TRUE)
 </details>
 
 <details>
+<summary><code>round2()</code>: round with fixed decimals (optional drop of leading zeros)</summary>
+
+```r
+round2(0.34, 2)
+round2(0.34, 2, leading.zero = TRUE)
+round2(c(0.34, 1.25), 2)
+```
+</details>
+
+<details>
 <summary><code>var_labels()</code>: get/set variable labels</summary>
 
 ```r
@@ -341,4 +352,4 @@ GPL-3
 
 ## Version
 
-CRAN release: **0.3.0** (stimulus plots, `lm2_notes()`, Cohen's d in `t.test2()`, and related fixes). Development version may be ahead of CRAN.
+CRAN release: **0.4.0**.

@@ -288,18 +288,19 @@ ip_validate_arguments <- function(
   save.as,
   xvar, zvar, yvar,
   x.ticks, y1.ticks, y2.ticks,
-  moderator.on.x.axis
+  moderator.on.x.axis,
+  dataname = NULL
 ) {
   if (!is.null(data)) {
-    dataname <- deparse(substitute(data))
+    if (is.null(dataname) || !nzchar(dataname)) dataname <- "data"
     if (!inherits(data, "data.frame")) {
       exit(paste0("interprobe says(): the 'data' argument must be a data.frame, but '", dataname, "' is not a data.frame."))
     }
 
     n1 <- names(data)
-    if (!xvar %in% n1) exit(paste0("interprobe() says the focal variable ('", xvar, "') is not in the dataset '", dataname, "'."))
-    if (!zvar %in% n1) exit(paste0("interprobe() says the moderator variable ('", zvar, "') is not in the dataset '", dataname, "'."))
-    if (!yvar %in% n1) exit(paste0("interprobe() says the dependent variable ('", yvar, "') is not in the dataset '", dataname, "'."))
+    if (!xvar %in% n1) exit(paste0("'", xvar, "' is not a variable in dataframe '", dataname, "'"))
+    if (!zvar %in% n1) exit(paste0("'", zvar, "' is not a variable in dataframe '", dataname, "'"))
+    if (!yvar %in% n1) exit(paste0("'", yvar, "' is not a variable in dataframe '", dataname, "'"))
   }
 
   if (
@@ -360,7 +361,19 @@ ip_validate_arguments <- function(
   ip_check1(main1, "main1", 1, "character")
   ip_check1(main2, "main2", 1, "character")
   ip_check1(legend.round, "legend.round", 2, "integer")
-  ip_check1(cols, "cols", 3, "character")
+
+  # cols: length 2 (binary focal) or 3 (spotlights / 3-level categorical)
+  if (!is.character(cols)) {
+    exit("interprobe() says the argument 'cols' must be a character variable but it isn't.")
+  }
+  if (!length(cols) %in% c(2L, 3L)) {
+    exit(
+      paste0(
+        "interprobe() says the argument 'cols' must be of length 2 or 3\n",
+        "but it is of length '", length(cols), "'"
+      )
+    )
+  }
 
   draw2 <- draw
   if (identical(draw2, "simple.slopes")) draw2 <- "simple slopes"
@@ -434,7 +447,23 @@ ip_validate_arguments <- function(
     exit(paste0("interprobe() says: the argument 'y2.ticks' must be a dataframe with 2 columns, but it has '", ncol(y2.ticks), "' columns."))
   }
 
-  ip_check1(moderator.on.x.axis, "moderator.on.x.axis", 1, "logical")
+  if (length(moderator.on.x.axis) != 1) {
+    exit(
+      paste0(
+        "interprobe() says the argument 'moderator.on.x.axis' must be of length '1'\n",
+        "but it is of length '", length(moderator.on.x.axis), "'"
+      )
+    )
+  }
+  if (!identical(moderator.on.x.axis, "auto") &&
+      (!is.logical(moderator.on.x.axis) || is.na(moderator.on.x.axis))) {
+    exit(
+      paste0(
+        "interprobe() says the argument 'moderator.on.x.axis' must be 'auto', TRUE, or FALSE, but '",
+        moderator.on.x.axis, "' isn't."
+      )
+    )
+  }
 
   if (length(unique(c(xvar, zvar, yvar))) < 3) {
     exit("interprobe() says: you seem to have entered the same variable twice")
@@ -619,8 +648,8 @@ ip_compute_jn_continuous <- function(spotlights, data, xs, zs, model, xvar, zvar
     j <- 1
     for (zj in spotlights) {
       ndj <- expand.grid(z = zj, x = xs)
-      ndj <- ip_add_covariates_at_mean(ndj, data)
       names(ndj)[1:2] <- c(zvar, xvar)
+      ndj <- ip_add_covariates_at_mean(ndj, data)
       options(warn = -1)
       jn[[j]] <- data.frame(marginaleffects::slopes(model, newdata = ndj, var = xvar))
       jn[[j]][, zvar] <- zj
@@ -635,8 +664,8 @@ ip_compute_jn_continuous <- function(spotlights, data, xs, zs, model, xvar, zvar
     j <- 1
     for (xj in spotlights) {
       ndj <- expand.grid(x = xj, z = zs)
-      ndj <- ip_add_covariates_at_mean(ndj, data)
       names(ndj)[1:2] <- c(xvar, zvar)
+      ndj <- ip_add_covariates_at_mean(ndj, data)
       options(warn = -1)
       jn[[j]] <- data.frame(marginaleffects::slopes(model, newdata = ndj, var = xvar))
       jn[[j]][, xvar] <- xj
@@ -803,20 +832,81 @@ ip_draw_histogram <- function(fxz.list, focal, moderation, x1s, nux1, cols, ylim
   breaks
 }
 
+ip_resolve_moderator_on_x_axis <- function(moderator.on.x.axis, nux, max.unique) {
+  if (identical(moderator.on.x.axis, "auto")) {
+    return(nux <= 3)
+  }
+  moderator.on.x.axis
+}
+
+ip_transpose_discrete_by_z <- function(res, z_lines, zvar) {
+  out <- vector("list", length(z_lines))
+  for (j in seq_along(z_lines)) {
+    est <- conf.low <- conf.high <- numeric(length(res))
+    for (i in seq_along(res)) {
+      r <- res[[i]]
+      zvals <- r[[zvar]]
+      if (is.character(z_lines) || is.factor(z_lines)) {
+        idx <- which(as.character(zvals) == as.character(z_lines[j]))[1]
+      } else {
+        idx <- which.min(abs(as.numeric(zvals) - as.numeric(z_lines[j])))
+      }
+      if (is.na(idx)) idx <- 1L
+      est[i] <- r$estimate[idx]
+      conf.low[i] <- r$conf.low[idx]
+      conf.high[i] <- r$conf.high[idx]
+    }
+    out[[j]] <- data.frame(estimate = est, conf.low = conf.low, conf.high = conf.high)
+  }
+  out
+}
+
 ip_make_plot <- function(
   type, xlab, ylab, main, res, histogram, data, xs, zs, gr, spotlights, cols, spotlight.labels,
   focal, moderation, max.unique, fxz.list, nux, nuz, xvar, zvar, xlim, ylim, legend.title,
   x.ticks, y.ticks, moderator.on.x.axis
 ) {
   ylim.set.by.user <- !is.null(ylim)
+  plot_res <- res
+  plot_gr <- gr
+  plot_spotlight.labels <- spotlight.labels
 
   if (moderator.on.x.axis == FALSE) {
-    if (xlab == "") xlab <- xvar
-    n.lines <- length(spotlights)
     x1.range <- range(data[, xvar])
     x1s <- xs
     nux1 <- nux
     x1.axis <- "x"
+
+    if (type == "jn" && focal == "categorical") {
+      if (xlab == "") xlab <- zvar
+      n.lines <- nux - 1
+      x1.range <- range(data[, zvar])
+      x1s <- zs
+      nux1 <- nuz
+      x1.axis <- "z"
+    } else {
+      if (xlab == "") xlab <- xvar
+
+      if (type == "simple.slopes" && focal == "categorical") {
+        if (moderation == "discrete") {
+          z_lines <- sort(unique(data[, zvar]))
+          plot_spotlight.labels <- as.character(z_lines)
+        } else {
+          z_lines <- spotlights
+        }
+        n.lines <- length(z_lines)
+        plot_res <- ip_transpose_discrete_by_z(res, z_lines, zvar)
+        if (ncol(plot_gr) == n.lines && nrow(plot_gr) == nux) {
+          plot_gr <- t(plot_gr)
+        } else if (nrow(plot_gr) == n.lines && ncol(plot_gr) == nux) {
+          plot_gr <- plot_gr
+        } else {
+          plot_gr <- t(plot_gr)
+        }
+      } else {
+        n.lines <- length(spotlights)
+      }
+    }
   }
 
   if (moderator.on.x.axis == TRUE) {
@@ -842,7 +932,7 @@ ip_make_plot <- function(
     par(mar = m1)
   }
 
-  res.df <- do.call(rbind, res)
+  res.df <- do.call(rbind, plot_res)
 
   if (is.null(ylim)) ylim <- range(res.df[, c("conf.low", "conf.high")])
   ylim1 <- ylim[1]
@@ -869,7 +959,7 @@ ip_make_plot <- function(
   if (!is.null(y.ticks)) ylab.plotted <- ""
 
   graphics::plot(
-    x1s, res[[1]]$estimate,
+    x1s, plot_res[[1]]$estimate,
     type = "n",
     xlab = xlab,
     ylab = ylab.plotted,
@@ -904,21 +994,21 @@ ip_make_plot <- function(
   if (focal == "categorical" & type == "jn") col.seg <- col.seg[-1]
 
   for (j in 1:n.lines) {
-    g1 <- as.numeric(gr[, j])
+    g1 <- as.numeric(plot_gr[, j])
     if (nux1 > max.unique) g <- rep(g1, each = length(x1s) / length(g1))
     if (nux1 <= max.unique) g <- g1
 
-    ip_line_seg(x1s, res[[j]]$estimate, lwd = 4 * g, col = col.seg[j], g = g)
+    ip_line_seg(x1s, plot_res[[j]]$estimate, lwd = 4 * g, col = col.seg[j], g = g)
 
     graphics::polygon(
       x = c(x1s, rev(x1s)),
-      y = c(res[[j]]$conf.high, rev(res[[j]]$conf.low)),
+      y = c(plot_res[[j]]$conf.high, rev(plot_res[[j]]$conf.low)),
       col = grDevices::adjustcolor(col.seg[j], 0.1),
       border = NA
     )
 
     if (nux1 <= max.unique) {
-      graphics::points(x1s, res[[j]]$estimate, col = ip_adjustcolor2(col.seg[j], pmax(g, 0.2)), pch = 16, cex = 1.5)
+      graphics::points(x1s, plot_res[[j]]$estimate, col = ip_adjustcolor2(col.seg[j], pmax(g, 0.2)), pch = 16, cex = 1.5)
     }
   }
 
@@ -926,6 +1016,7 @@ ip_make_plot <- function(
 
   if (x1.axis == "x") {
     if (is.null(legend.title)) legend.title <- zvar
+    legend_labels <- if (is.null(plot_spotlight.labels)) spotlights else plot_spotlight.labels
     graphics::legend(
       "top",
       inset = 0.01,
@@ -934,7 +1025,7 @@ ip_make_plot <- function(
       col = cols[1:n.lines],
       title = legend.title,
       title.font = 2,
-      legend = spotlight.labels
+      legend = legend_labels
     )
   }
 
@@ -950,7 +1041,10 @@ ip_make_plot <- function(
     }
 
     if (type == "jn" & focal == "categorical") {
-      graphics::legend("top", inset = 0.01, bty = "n", lwd = 5, col = cols[-1], title = legend.title, title.font = 2, legend = paste0(xs[-1], " - ", xs[1]))
+      graphics::legend(
+        "top", inset = 0.01, bty = "n", lwd = 5, col = cols[-1], title = legend.title, title.font = 2,
+        legend = paste0(xs[-1], " - ", xs[1])
+      )
     }
 
     if (type == "jn" & focal == "continuous") {
@@ -968,7 +1062,13 @@ ip_make_plot <- function(
   breaks
 }
 
-ip_get_regions_jn <- function(j, xvar, zvar, focal, probe.bins) {
+ip_pct_in_range <- function(data, var, from, to) {
+  x <- data[[var]]
+  if (is.factor(x)) x <- as.numeric(x)
+  100 * mean(x >= from & x <= to, na.rm = TRUE)
+}
+
+ip_get_regions_jn <- function(j, xvar, zvar, focal, probe.bins, data) {
   j$k <- 1:nrow(j)
   js <- j[j$conf.low * j$conf.high > 0, ]
   output <- "Johnson-Neyman Regions of Significance\n"
@@ -1011,10 +1111,12 @@ ip_get_regions_jn <- function(j, xvar, zvar, focal, probe.bins) {
         for (rowk in 1:nrow(xs)) {
           k <- k + 1
           xr <- xs[rowk, ]
+          pct <- ip_pct_in_range(data, xvar, xr$from.x, xr$to.x)
           output <- paste0(
             output,
             k, ") When '", zvar, "' = ", round(zk, 2), ", the effect of '", xvar, "' is ", xr$sign.text,
-            " in the range of '", xvar, "': [", round(xr$from.x, 2), " to ", round(xr$to.x, 2), "]\n"
+            " in the range of '", xvar, "': [", round(xr$from.x, 2), " to ", round(xr$to.x, 2), "] (",
+            round(pct, 1), "% of the sample)\n"
           )
         }
       }
@@ -1040,10 +1142,12 @@ ip_get_regions_jn <- function(j, xvar, zvar, focal, probe.bins) {
         for (rowk in 1:nrow(zs)) {
           k <- k + 1
           zr <- zs[rowk, ]
+          pct <- ip_pct_in_range(data, zvar, zr$from.z, zr$to.z)
           output <- paste0(
             output,
             k, ") The contrast for '", xvar, "' of ", conk.clean, " is ", zr$sign.text,
-            " in the range of '", zvar, "': [", round(zr$from.z, 2), " to ", round(zr$to.z, 2), "]\n"
+            " in the range of '", zvar, "': [", round(zr$from.z, 2), " to ", round(zr$to.z, 2), "] (",
+            round(pct, 1), "% of the sample)\n"
           )
         }
       }

@@ -19,7 +19,7 @@ utils::globalVariables(c("m1", "m2", "m3", "m1.cluster"))
 
 #Functions
 
-#1 round2()        - Rounding
+#1 sp_round2()     - Rounding (internal; exported API is round2() in R/round2.R)
 #2 exit()          - message to show when executoin ends early
 #3 clean_string()  - Remove everything except letters, numbers, and underscores
 #4 tidy.t()        - t.test outputs to data.frame
@@ -42,8 +42,8 @@ utils::globalVariables(c("m1", "m2", "m3", "m1.cluster"))
 
 #----------------------------------
 
-#1 Rounding
-  round2 <- function(x, digits = 2) { 
+#1 Rounding (internal stimulus helper; always strips leading zeros per element)
+  sp_round2 <- function(x, digits = 2) { 
     ncode <- paste0("%.", digits, "f")
     sub("^(-?)0.", "\\1.", sprintf(ncode, x))
   }
@@ -615,8 +615,9 @@ validate.stimulus.plot=function(plot.type, data,dv, condition, stimulus, save.as
           t.all <- data.frame(stimulus = rownames(t.all), t.all, row.names = NULL)
           
               
-      # Rename the means columns
-        names(t.all)[2:3] <- c(paste0(condition,"_",ucond[1]), paste0(condition,"_",ucond[2]))
+      # Rename the means columns from actual factor levels (respects flip.conditions)
+        levs <- levels(data[, condition])
+        names(t.all)[2:3] <- c(paste0(condition, "_", levs[1]), paste0(condition, "_", levs[2]))
         names(t.all)[1] <-stimulus 
       # Sort rows
           #Default: effect size
@@ -780,8 +781,8 @@ validate.stimulus.plot=function(plot.type, data,dv, condition, stimulus, save.as
         means.obs = get.means.condition(data,dv,stimulus,condition,sort.by='',FALSE)
 
       #Means for condition 1 & 2 for each stimulus
-        m1.obs=means.obs[,1]
-        m2.obs=means.obs[,2]
+        m1.obs = means.obs[[paste0(condition, "_", uc[1])]]
+        m2.obs = means.obs[[paste0(condition, "_", uc[2])]]
         
       #Overall means for conditions 1 & 2
         m1.all=mean(m1.obs)
@@ -839,8 +840,8 @@ validate.stimulus.plot=function(plot.type, data,dv, condition, stimulus, save.as
    names(under.null.resamples)   =paste0('stimulus_',1:ncol(under.null.resamples))
    rownames(under.null.resamples)=paste0('resample_',1:nrow(under.null.resamples))
    
-  #Compute heterogeneity p-value
-    d.obs  = means.obs$effect
+  #Compute heterogeneity p-value (use caller's obs effects so flip matches null resamples)
+    d.obs  = obs$effect
     e2.obs = sum((dM-d.obs)^2)
     
   #Resampled
@@ -1244,8 +1245,8 @@ validate.stimulus.plot=function(plot.type, data,dv, condition, stimulus, save.as
     #Labels themselves
       if (dv.is.percentage==FALSE)
       {
-      text(1:n,bh,round2(bh,auto.decimals(bh)),col=col.h,cex=.75,pos=3)
-      text(1:n,bl,round2(bl,auto.decimals(bl)),col=col.l,cex=.75,pos=1)
+      text(1:n,bh,sp_round2(bh,auto.decimals(bh)),col=col.h,cex=.75,pos=3)
+      text(1:n,bl,sp_round2(bl,auto.decimals(bl)),col=col.l,cex=.75,pos=1)
       }
       
       if (dv.is.percentage==TRUE)
@@ -1267,8 +1268,8 @@ validate.stimulus.plot=function(plot.type, data,dv, condition, stimulus, save.as
     if (m1<m2) d.pos=rev(d.pos)
     if (dv.is.percentage==FALSE)
       {
-      text(n+3,m1 , round2(m1,auto.decimals(m1)),cex=.8,col='black',pos=d.pos[1])
-      text(n+3,m2 , round2(m2,auto.decimals(m1)),cex=.8,col='black',pos=d.pos[2])
+      text(n+3,m1 , sp_round2(m1,auto.decimals(m1)),cex=.8,col='black',pos=d.pos[1])
+      text(n+3,m2 , sp_round2(m2,auto.decimals(m1)),cex=.8,col='black',pos=d.pos[2])
       }
     
     
@@ -1311,9 +1312,8 @@ validate.stimulus.plot=function(plot.type, data,dv, condition, stimulus, save.as
         mtext(side=1,line=3.7 + xlabel.buffer   ,font=3,cex=1,xlab2)
 
         
-  #13 Legend
+  #13 Legend (labels already match named mean columns / factor levels)
         labels=c(label1,label2)
-        if (flip.conditions) labels=rev(labels)
         #leg1 = legend('topleft',pch=c(16,1), labels ,inset=.05,bty='n',cex=1.3, y.intersp = 1.5)
         
         #Legend title?
@@ -1380,16 +1380,9 @@ validate.stimulus.plot=function(plot.type, data,dv, condition, stimulus, save.as
         ciL = obs$ciL
         ciH = obs$ciH
         n = length(d)
-        label2  =  sub(paste0("^",condition,"_"), "", names(obs[3]))
+        # Labels from mean column names (already match factor levels under flip)
         label1  =  sub(paste0("^",condition,"_"), "", names(obs[2]))
-       
-        if (flip.conditions)
-        {
-          l1 = label1
-          l2 = label2
-          label1 = l2
-          label2 = l1
-          }
+        label2  =  sub(paste0("^",condition,"_"), "", names(obs[3]))
         
     #3 Get the null distribution  (only if sort.by is not set)
           d0=rep(d,length(unique(data[,stimulus])))   #make it equal to d just to help with code below, e.g., ylim=range(...)
@@ -1564,7 +1557,7 @@ validate.stimulus.plot=function(plot.type, data,dv, condition, stimulus, save.as
         if (decimals=='auto') d.decimals=auto.decimals(d)
         if (decimals!='auto') d.decimals=decimals
       
-      if (dv.is.percentage==FALSE) text(1:n,d ,round2(d , d.decimals),col='blue4',cex=.65,pos=4)
+      if (dv.is.percentage==FALSE) text(1:n,d ,sp_round2(d , d.decimals),col='blue4',cex=.65,pos=4)
       if (dv.is.percentage==TRUE)  text(1:n,d ,format_percent(d,decimals), col='blue4',cex=.65,pos=4) #utils.R #9 <-- 'format_percent()'
 
      
